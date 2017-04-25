@@ -30,8 +30,6 @@ import os
 
 # TODO: Fill this in based on where you saved the training and testing data
 
-# print(os.getcwd())
-
 training_file = "train.p"
 validation_file="valid.p"
 testing_file = "test.p"
@@ -46,10 +44,15 @@ with open(testing_file, mode='rb') as f:
 X_train, y_train = train['features'], train['labels']
 X_valid, y_valid = valid['features'], valid['labels']
 X_test, y_test = test['features'], test['labels']
-print(X_train.shape[0])
+
+
+# Checking the dimensions of the training/valid/test data
+
+# In[2]:
+
+print(X_train.shape)
 print(X_valid.shape)
 print(X_test.shape)
-print(y_train.shape)
 
 
 # ---
@@ -67,7 +70,7 @@ print(y_train.shape)
 
 # ### Provide a Basic Summary of the Data Set Using Python, Numpy and/or Pandas
 
-# In[2]:
+# In[3]:
 
 ### Replace each question mark with the appropriate value. 
 ### Use python, pandas or numpy methods rather than hard coding the results
@@ -102,7 +105,7 @@ print("Number of classes =", n_classes)
 # 
 # **NOTE:** It's recommended you start with something simple first. If you wish to do more, come back to it after you've completed the rest of the sections. It can be interesting to look at the distribution of classes in the training, validation and test set. Is the distribution the same? Are there more examples of some classes than others?
 
-# In[3]:
+# In[4]:
 
 ### Data exploration visualization code goes here.
 ### Feel free to use as many code cells as needed.
@@ -112,6 +115,9 @@ import random
 # Visualizations will be shown in the notebook.
 get_ipython().magic('matplotlib inline')
 
+
+# In[5]:
+
 index = random.randint(0, len(X_train))
 image = X_train[index].squeeze()
 
@@ -120,13 +126,15 @@ plt.imshow(image)
 print(y_train[index])
 
 
-# In[4]:
+# In[6]:
 
 # look at the distribution of classes in the training, validation and test
 import pandas as pd
 df = pd.DataFrame({"y_train":y_train})
-df['y_train'].value_counts().head()
+df['y_train'].value_counts()
 
+
+# It can be seen that the distribution of data is skewed. Some of the class (i.e., class 2) has more than 10 times samples than others (i.e., class 0). Data generation might be needed.
 
 # ----
 # 
@@ -155,16 +163,23 @@ df['y_train'].value_counts().head()
 # 
 # Use the code cell (or multiple code cells, if necessary) to implement the first step of your project.
 
-# In[6]:
+# In[7]:
 
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-import matplotlib.image as mpimg
+import matplotlib.image as mpimgb
 import numpy as np
 
 
-# In[7]:
+# #### Data generation
+# 
+# To address the imbalanced dataset, we use the following data generationt techniques:
+#     1. For class with less than 500 counts, generate three rotated images with rotation angles between -10 and 10 degrees.
+#     2. For class with more than 500 but less than 1000 counts, generate on rotated copy with rotation angles between -10 and 10 degrees.
+#     3. For all data, generate one additional translated copy with translation in -4 and 4 pixels (exclude 0). Dataset is divided into three batches for faster processing.
+
+# In[8]:
 
 from scipy.ndimage import rotate
 from sklearn.utils import shuffle
@@ -194,7 +209,6 @@ def generate_additional_data_rotate(x, y):
     return x, y
 
 X_train, y_train = generate_additional_data_rotate(X_train, y_train)
-# X_train, y_train = generate_additional_data_rotate(X_train, y_train)
 
 # Shuffle the data
 X_train, y_train = shuffle(X_train, y_train)
@@ -230,7 +244,6 @@ def generate_additional_data_translate(x, y):
     return x, y
 
 X_train, y_train = generate_additional_data_translate(X_train, y_train)
-print(X_train.shape, y_train.shape)
 
 # Shuffle the data
 X_train, y_train = shuffle(X_train, y_train)
@@ -245,7 +258,21 @@ axes = plt.gca()
 axes.set_ylim([0,5000])
 
 
-# In[8]:
+# #### Convert to grey scale and normalize
+# 
+# In this step:
+# 1. First convert the data into grey scale by taking the average of three channels.
+# 2. Normalize the data to centered at zero with small variance.
+
+# In[9]:
+
+def normalize(x):
+    X_grey = np.average(x,axis=3)
+    x_normalized = np.array([(X_grey[i,:,:] - 128.0)/128.0 for i in range(len(X_grey))]).reshape(X_grey.shape+(1,))
+    return x_normalized
+
+
+# In[10]:
 
 ### Preprocess the data here. It is required to normalize the data. Other preprocessing steps could include 
 ### converting to grayscale, etc.
@@ -255,24 +282,13 @@ axes.set_ylim([0,5000])
 X_train = X_train.astype(np.float32)
 X_test = X_test.astype(np.float32)
 
-# convert the data to grey scale, G = (R+G+B)/3
-X_train_grey = np.average(X_train,axis=3)
-X_valid_grey = np.average(X_valid,axis=3)
-X_test_grey = np.average(X_test,axis=3)
+X_train_normalized = normalize(X_train)
+X_valid_normalized = normalize(X_valid)
+X_test_normalized = normalize(X_test)
 
 
-# In[9]:
 
-# first use the naive normalization
-# X_train_normalized = np.zeros(X_train_grey.shape)
-X_train_normalized = np.array([(X_train_grey[i,:,:] - 128.0)/128.0 for i in range(len(X_train_grey))]).reshape(X_train_grey.shape+(1,))
-X_valid_normalized = np.array([(X_valid_grey[i,:,:] - 128.0)/128.0 for i in range(n_validation)]).reshape(X_valid_grey.shape+(1,))
-X_test_normalized = np.array([(X_test_grey[i,:,:] - 128.0)/128.0 for i in range(n_test)]).reshape(X_test_grey.shape+(1,))
-
-       
-
-
-# In[10]:
+# In[11]:
 
 print(X_train_normalized.shape)
 print(X_valid_normalized.shape)
@@ -281,17 +297,23 @@ print(X_test_normalized.shape)
 
 # ### Model Architecture
 
-# In[11]:
+# The following model architecture is used:
+# 1. LeNet architecture with two conv layers, two pooling layers, and three fully connected layers.
+# 2. A dropout probablity = 0.7 is used.
+# 3. 10 epochs with batch_size = 128.
+# 4. Use tanh as activation function.
+
+# In[12]:
 
 ### Define your architecture here.
 ### Feel free to use as many code cells as needed.
 import tensorflow as tf
 
-EPOCHS = 20
+EPOCHS = 15
 BATCH_SIZE = 128
 
 
-# In[12]:
+# In[13]:
 
 from tensorflow.contrib.layers import flatten
 
@@ -340,7 +362,6 @@ def LeNet(x):
 
     # TODO: Flatten. Input = 5x5x16. Output = 400.
     fc1 = tf.reshape(conv2, [-1, weights['wd1'].get_shape().as_list()[0]])
-#     fc0 = flatten(conv2)
 
     # TODO: Layer 3: Fully Connected. Input = 400. Output = 120.
     fc1 = tf.add(tf.matmul(fc1, weights['wd1']), biases['bd1'])
@@ -353,12 +374,9 @@ def LeNet(x):
     fc2 = tf.nn.tanh(fc2)
     fc2 = tf.nn.dropout(fc2, dropout)                                              
     
-    # TODO: Activation.
 
     # TODO: Layer 5: Fully Connected. Input = 84. Output = 43.
     logits = tf.add(tf.matmul(fc2, weights['out']), biases['out'])
-#     logits = tf.nn.relu(output)
-#     logits = tf.nn.dropout(output, dropout)  
     
     return logits
 
@@ -368,17 +386,21 @@ def LeNet(x):
 # A validation set can be used to assess how well the model is performing. A low accuracy on the training and validation
 # sets imply underfitting. A high accuracy on the training set but low accuracy on the validation set implies overfitting.
 
-# In[13]:
+# The following paratmeters are used after trial and error:
+# 1. rate = 0.002
+# 2. epoch = 15
+
+# In[14]:
 
 x = tf.placeholder(tf.float32, (None, 32, 32, 1))
 y = tf.placeholder(tf.int32, (None))
 one_hot_y = tf.one_hot(y, n_classes)
 
 
-# In[14]:
+# In[15]:
 
 ### Train your model here.
-rate = 0.003
+rate = 0.002
 
 logits = LeNet(x)
 cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=one_hot_y, logits=logits)
@@ -387,7 +409,7 @@ optimizer = tf.train.AdamOptimizer(learning_rate = rate)
 training_operation = optimizer.minimize(loss_operation)
 
 
-# In[15]:
+# In[16]:
 
 ### Calculate and report the accuracy on the training and validation set.
 correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(one_hot_y, 1))
@@ -410,7 +432,7 @@ def evaluate(X_data, y_data):
 
 
 
-# In[16]:
+# In[17]:
 
 from sklearn.utils import shuffle
 
@@ -448,16 +470,13 @@ with tf.Session() as sess:
         print("Validation accuracy = {:.3f}".format(validation_accuracy))
         print()
         
-#         validation_accuracy = evaluate(X_valid_normalized, y_valid)
-#         print("EPOCH {} ...".format(i+1))
-#         print("Validation Accuracy = {:.3f}".format(validation_accuracy))
-#         print()
-        
     saver.save(sess, './lenet')
     print("Model saved")
 
 
-# In[17]:
+# The loss plot as a function of epoch is depicted as below:
+
+# In[20]:
 
 loss_plot = plt.subplot(2,1,1)
 loss_plot.set_title('Loss')
@@ -467,7 +486,7 @@ loss_plot.set_xlim([0, EPOCHS])
 loss_plot.legend(loc=1)
 
 
-# In[19]:
+# In[40]:
 
 ### Once a final model architecture is selected, 
 ### the accuracy on the test set should be calculated and reported as well.
@@ -477,6 +496,13 @@ with tf.Session() as sess:
 
     test_loss, test_accuracy = evaluate(X_test_normalized, y_test)
     print("Test Accuracy = {:.3f}".format(test_accuracy))
+
+
+# In[22]:
+
+# save the data for later use
+import pickle
+pickle.dump((X_train_normalized, y_train,X_valid_normalized,y_valid,X_test_normalized,y_test),open("save.p","wb"))
 
 
 # ---
@@ -489,27 +515,89 @@ with tf.Session() as sess:
 
 # ### Load and Output the Images
 
-# In[ ]:
+# Download a dataset of 10 images and put it under directory 'traffic_test'. Randomly choose five images and plot them.
+
+# In[46]:
 
 ### Load the images and plot them here.
 ### Feel free to use as many code cells as needed.
+import matplotlib.image as mpimg
+
+plt.rcParams['figure.figsize'] = (8, 10)
+
+directory = 'test_images/'
+
+image_names = ['test0.jpg','test1.jpg','test2.jpg', 'test3.jpg', 'test4.jpg']
+
+test_images = np.zeros((5,32,32,3), dtype=np.uint8)
+
+for i in range(5):
+    image = mpimg.imread(directory + image_names[i])
+    test_images[i] = image
+    plt.subplot(5, 1, i+1)
+    plt.imshow(image)
+    plt.axis('off')
+    
 
 
 # ### Predict the Sign Type for Each Image
 
-# In[3]:
+# In[48]:
 
 ### Run the predictions here and use the model to output the prediction for each image.
 ### Make sure to pre-process the images with the same pre-processing pipeline used earlier.
 ### Feel free to use as many code cells as needed.
+### Run the predictions here and use the model to output the prediction for each image.
+### Make sure to pre-process the images with the same pre-processing pipeline used earlier.
+### Feel free to use as many code cells as needed.
+test_images = test_images.astype(np.float32)
+test_images = normalize(test_images)
 
+labels = ['Speed limit (20km/h)', 'Speed limit (30km/h)', 'Speed limit (50km/h)', 'Speed limit (60km/h)', 
+          'Speed limit (70km/h)', 'Speed limit (80km/h)', 'End of speed limit (80km/h)', 'Speed limit (100km/h)', 
+          'Speed limit (120km/h)', 'No passing', 'No passing for vechiles over 3.5 metric tons', 
+          'Right-of-way at the next intersection', 'Priority road', 'Yield', 'Stop', 'No vechiles', 
+          'Vechiles over 3.5 metric tons prohibited', 'No entry', 'General caution', 'Dangerous curve to the left', 
+          'Dangerous curve to the right', 'Double curve', 'Bumpy road', 'Slippery road', 'Road narrows on the right', 
+          'Road work', 'Traffic signals', 'Pedestrians', 'Children crossing', 'Bicycles crossing', 
+          'Beware of ice/snow', 'Wild animals crossing', 'End of all speed and passing limits', 'Turn right ahead', 
+          'Turn left ahead', 'Ahead only', 'Go straight or right', 'Go straight or left', 'Keep right', 'Keep left', 
+          'Roundabout mandatory', 'End of no passing', 'End of no passing by vechiles over 3.5 metric tons']
+
+
+with tf.Session() as sess:
+    saver.restore(sess, tf.train.latest_checkpoint('.'))
+    
+    predicted_logits = sess.run(logits, feed_dict={x:test_images})
+    predicted_labels = np.argmax(predicted_logits, axis=1)
+
+for i in range(5):
+    image = mpimg.imread(directory + image_names[i])
+    plt.subplot(5, 1, i+1)
+    plt.imshow(image)
+    plt.axis('off')
+    plt.title("Predicted Label: " + labels[predicted_labels[i]], fontsize=7)
+    
+
+    
+
+
+# 1. The 40km/h speed limit is misclassified as 50km/h.
+# 2. The 50km/h speed limit is misclassified as 80km/h.
+# 3. The 80km/h speed limit is correctly classified as 80km/h.
+# 4. The stop sign is correctly classified.
+# 5. The slippery road is misclassified as dangerours curve to the right. 
 
 # ### Analyze Performance
 
-# In[4]:
+# In[51]:
 
 ### Calculate the accuracy for these 5 new images. 
 ### For example, if the model predicted 1 out of 5 signs correctly, it's 20% accurate on these new images.
+correct_labeled = 2
+all_signs = 5
+accuracy = correct_labeled/all_signs 
+print('the accuracy running model against these 5 new images are: ', accuracy)
 
 
 # ### Output Top 5 Softmax Probabilities For Each Image Found on the Web
@@ -552,10 +640,33 @@ with tf.Session() as sess:
 # 
 # Looking just at the first row we get `[ 0.34763842,  0.24879643,  0.12789202]`, you can confirm these are the 3 largest probabilities in `a`. You'll also notice `[3, 0, 5]` are the corresponding indices.
 
-# In[3]:
+# Calculate the top 5 softmax probability for each new images. Also bar chart is depicted for better illustration.
+
+# In[50]:
 
 ### Print out the top five softmax probabilities for the predictions on the German traffic sign images found on the web. 
 ### Feel free to use as many code cells as needed.
+### Print out the top five softmax probabilities for the predictions on the German traffic sign images found on the web. 
+### Feel free to use as many code cells as needed.
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    return np.exp(x) / np.sum(np.exp(x), axis=1, keepdims=True)
+
+softmax_probabilites = softmax(predicted_logits)
+
+with tf.Session() as sess:
+    top5_prob = sess.run(tf.nn.top_k(tf.constant(softmax_probabilites),k=5))
+
+
+print(top5_prob)
+fig = plt.figure()
+width = 0.5
+x_vals = range(43)
+for i in range(5):
+    ax = fig.add_subplot(5,1,i+1)
+    ax.bar(x_vals, softmax_probabilites[i], width)
+
+plt.show()
 
 
 # ### Project Writeup
